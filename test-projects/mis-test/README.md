@@ -63,6 +63,8 @@ This logs says that:
 
 Effectively, we can't achieve the objective of async-generating MIS **and** bundling it into lambda this way.
 
+See the diff [here](https://github.com/aws-amplify/amplify-backend/commit/12c0d60ba1fb83f70c9e0178086b9381ee7e2d7f) 
+
 # Approach 2 - execaSynth
 
 In this case we are leveraging that fact that one can execute child process synchronously.
@@ -73,6 +75,8 @@ This feels a bit hacky, but might be acceptable stop gap solution given that:
 1. The content of child process's script depends only on `@aws-amplify/graphql-generator`
 2. The content of child process's script can still be tested and compiled to assure correctness.
 3. This "solution" can be hidden behind internal abstraction and wait for `@aws-amplify/graphql-generator` to offer sync API (if ever).
+
+See the diff [here](https://github.com/aws-amplify/amplify-backend/commit/23a986e1dad55976681e8762a0b891bfd1455437)
 
 # Test app
 

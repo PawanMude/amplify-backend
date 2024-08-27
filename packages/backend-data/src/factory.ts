@@ -1,4 +1,5 @@
 import { IConstruct } from 'constructs';
+import * as fs from 'fs';
 import {
   AmplifyFunction,
   AuthResources,
@@ -45,6 +46,8 @@ import {
   FunctionSchemaAccess,
   JsResolver,
 } from '@aws-amplify/data-schema-types';
+import { ModelIntrospectionSchemaGenerator } from './model-introspection-schema-generator/model_introspection_schema_generator.js';
+import { Asset } from 'aws-cdk-lib/aws-s3-assets';
 
 /**
  * Singleton factory for AmplifyGraphqlApi constructs that can be used in Amplify project files.
@@ -55,6 +58,7 @@ export class DataFactory implements ConstructFactory<AmplifyData> {
   // publicly accessible for testing purpose only.
   static factoryCount = 0;
 
+  readonly provides = 'DataResources';
   private generator: ConstructContainerEntryGenerator;
 
   /**
@@ -118,7 +122,8 @@ class DataGenerator implements ConstructContainerEntryGenerator {
     private readonly props: DataProps,
     private readonly providedAuthConfig: ProvidedAuthConfig | undefined,
     private readonly getInstanceProps: ConstructFactoryGetInstanceProps,
-    private readonly outputStorageStrategy: BackendOutputStorageStrategy<GraphqlOutput>
+    private readonly outputStorageStrategy: BackendOutputStorageStrategy<GraphqlOutput>,
+    private readonly modelIntrospectionSchemaGenerator = new ModelIntrospectionSchemaGenerator()
   ) {
     this.name = props.name ?? 'amplifyData';
   }
@@ -236,9 +241,10 @@ class DataGenerator implements ConstructContainerEntryGenerator {
       scope.node.tryGetContext(CDKContextKey.DEPLOYMENT_TYPE) === 'sandbox';
 
     try {
+      const combinedSchema = combineCDKSchemas(amplifyGraphqlDefinitions);
       amplifyApi = new AmplifyData(scope, this.name, {
         apiName: this.name,
-        definition: combineCDKSchemas(amplifyGraphqlDefinitions),
+        definition: combinedSchema,
         authorizationModes,
         outputStorageStrategy: this.outputStorageStrategy,
         functionNameMap,
@@ -252,6 +258,22 @@ class DataGenerator implements ConstructContainerEntryGenerator {
           _provisionHotswapFriendlyResources: isSandboxDeployment,
         },
       });
+
+      // This is a hack, and it should be emitted into construct container is some other way, but for POC it'll do.
+      const modelIntrospectionSchema =
+        this.modelIntrospectionSchemaGenerator.generate(combinedSchema.schema);
+      const modelIntrospectionSchemaPath = path.join(
+        process.cwd(),
+        '.amplify',
+        'modelIntrospectionSchema.json'
+      );
+      fs.writeFileSync(modelIntrospectionSchemaPath, modelIntrospectionSchema);
+      // This is not needed for POC, but maybe it's not a bad idea to add this to assets.
+      new Asset(scope, 'modelIntrospectionSchema', {
+        path: modelIntrospectionSchemaPath,
+      });
+      // @ts-ignore
+      amplifyApi.modelIntrospectionSchemaPath = modelIntrospectionSchemaPath;
     } catch (error) {
       throw new AmplifyUserError(
         'AmplifyDataConstructInitializationError',

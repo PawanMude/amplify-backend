@@ -145,9 +145,25 @@ class FunctionFactory implements ConstructFactory<AmplifyFunction> {
     resourceNameValidator,
   }: ConstructFactoryGetInstanceProps): AmplifyFunction => {
     if (!this.generator) {
+      // TODO this should be conditional on some signal,
+      // for example that any access to data was granted for this function.
+      const dataResources = constructContainer
+        .getConstructFactory<ResourceProvider<never>>('DataResources')
+        ?.getInstance({
+          constructContainer,
+          outputStorageStrategy,
+          resourceNameValidator,
+        });
+      let modelIntrospectionSchemaPath: string | undefined;
+      // this part below is hacky
+      if (dataResources && 'modelIntrospectionSchemaPath' in dataResources) {
+        modelIntrospectionSchemaPath =
+          dataResources.modelIntrospectionSchemaPath as string;
+      }
       this.generator = new FunctionGenerator(
         this.hydrateDefaults(resourceNameValidator),
-        outputStorageStrategy
+        outputStorageStrategy,
+        modelIntrospectionSchemaPath
       );
     }
     return constructContainer.getOrCompute(this.generator) as AmplifyFunction;
@@ -272,7 +288,8 @@ class FunctionGenerator implements ConstructContainerEntryGenerator {
 
   constructor(
     private readonly props: HydratedFunctionProps,
-    private readonly outputStorageStrategy: BackendOutputStorageStrategy<FunctionOutput>
+    private readonly outputStorageStrategy: BackendOutputStorageStrategy<FunctionOutput>,
+    private readonly modelIntrospectionSchemaPath: string | undefined
   ) {}
 
   generateContainerEntry = ({
@@ -284,7 +301,8 @@ class FunctionGenerator implements ConstructContainerEntryGenerator {
       this.props.name,
       this.props,
       backendSecretResolver,
-      this.outputStorageStrategy
+      this.outputStorageStrategy,
+      this.modelIntrospectionSchemaPath
     );
   };
 }
@@ -303,7 +321,8 @@ class AmplifyFunction
     id: string,
     props: HydratedFunctionProps,
     backendSecretResolver: BackendSecretResolver,
-    outputStorageStrategy: BackendOutputStorageStrategy<FunctionOutput>
+    outputStorageStrategy: BackendOutputStorageStrategy<FunctionOutput>,
+    modelIntrospectionSchemaPath: string | undefined
   ) {
     super(scope, id);
 
@@ -361,18 +380,23 @@ class AmplifyFunction
           sourceMap: true,
           commandHooks: {
             afterBundling(inputDir: string, outputDir: string): string[] {
-              console.log(`afterBundling ${inputDir} ${outputDir}`)
+              console.log(`afterBundling ${inputDir} ${outputDir}`);
               return [];
             },
             beforeBundling(inputDir: string, outputDir: string): string[] {
-              console.log(`beforeBundling ${inputDir} ${outputDir}`)
-              return [];
+              console.log(`beforeBundling ${inputDir} ${outputDir}`);
+              // this is a hack to POC data flow, not sure what best bundling strategy for mis is.
+              const hooks: string[] = [];
+              if (modelIntrospectionSchemaPath) {
+                hooks.push(`cp ${modelIntrospectionSchemaPath} ${outputDir}`);
+              }
+              return hooks;
             },
             beforeInstall(inputDir: string, outputDir: string): string[] {
-              console.log('beforeInstall')
+              console.log('beforeInstall');
               return [];
-            }
-          }
+            },
+          },
         },
       });
     } catch (error) {

@@ -3,7 +3,7 @@ import {
   DeepPartialAmplifyGeneratedConfigs,
   ResourceProvider,
 } from '@aws-amplify/plugin-types';
-import { Stack } from 'aws-cdk-lib';
+import { App, Stack } from 'aws-cdk-lib';
 import {
   NestedStackResolver,
   StackResolver,
@@ -55,7 +55,11 @@ export class BackendFactory<
    * Initialize an Amplify backend with the given construct factories and in the given CDK App.
    * If no CDK App is specified a new one is created
    */
-  constructor(constructFactories: T, stack: Stack = createDefaultStack()) {
+  constructor(
+    constructFactories: T,
+    app: App = new App({ autoSynth: false }),
+    stack: Stack = createDefaultStack(app)
+  ) {
     new AttributionMetadataStorage().storeAttributionMetadata(
       stack,
       rootStackTypeIdentifier,
@@ -123,6 +127,18 @@ export class BackendFactory<
         ) as any;
       }
     );
+
+    const synth = async (): Promise<void> => {
+      console.log('beforeSynth');
+      for (const constructFactory of Object.values(constructFactories)) {
+        if (constructFactory.beforeSynth) {
+          await constructFactory.beforeSynth();
+        }
+      }
+      app.synth();
+    };
+
+    process.once('beforeExit', () => void synth());
   }
 
   /**

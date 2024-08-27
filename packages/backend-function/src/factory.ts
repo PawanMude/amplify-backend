@@ -359,6 +359,20 @@ class AmplifyFunction
           },
           minify: true,
           sourceMap: true,
+          commandHooks: {
+            afterBundling(inputDir: string, outputDir: string): string[] {
+              console.log(`afterBundling ${inputDir} ${outputDir}`)
+              return [];
+            },
+            beforeBundling(inputDir: string, outputDir: string): string[] {
+              console.log(`beforeBundling ${inputDir} ${outputDir}`)
+              return [];
+            },
+            beforeInstall(inputDir: string, outputDir: string): string[] {
+              console.log('beforeInstall')
+              return [];
+            }
+          }
         },
       });
     } catch (error) {
